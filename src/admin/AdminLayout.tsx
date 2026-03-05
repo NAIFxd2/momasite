@@ -3,7 +3,7 @@ import { useAuth } from "./AuthContext";
 import { useContent } from "@/content/ContentContext";
 import AdminLogin from "./AdminLogin";
 import {
-    LogOut, Home, Cookie, Info, Phone, Settings, ChevronLeft, ChevronRight, RotateCcw, Store
+    LogOut, Home, Cookie, Info, Phone, Settings, ChevronLeft, ChevronRight, RotateCcw, Store, Upload
 } from "lucide-react";
 import HomeEditor from "./editors/HomeEditor";
 import SaboresEditor from "./editors/SaboresEditor";
@@ -26,7 +26,7 @@ type SectionId = (typeof sections)[number]["id"];
 
 export default function AdminLayout() {
     const { isAuthenticated, logout } = useAuth();
-    const { resetAll } = useContent();
+    const { resetAll, publishContent } = useContent();
     const [activeSection, setActiveSection] = useState<SectionId>("home");
     const [collapsed, setCollapsed] = useState(false);
 
@@ -86,6 +86,16 @@ export default function AdminLayout() {
 
                 {/* Footer actions */}
                 <div className="p-3 border-t border-white/10 space-y-1">
+                    <button
+                        onClick={() => {
+                            publishContent();
+                            alert("Arquivo baixado! Salve-o em:\npublic/content-overrides.json\n\nDepois faça:\ngit add .\ngit commit -m \"publicar conteúdo\"\ngit push");
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-body text-sm bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 hover:text-emerald-200 transition-all"
+                    >
+                        <Upload size={16} />
+                        {!collapsed && <span>Publicar para Deploy</span>}
+                    </button>
                     <button
                         onClick={() => {
                             if (confirm("Restaurar todos os textos e imagens para os valores originais?")) {

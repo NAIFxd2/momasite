@@ -11,6 +11,7 @@ interface ContentContextType {
     removeField: (path: string) => void;
     resetSection: (section: keyof SiteContent) => void;
     resetAll: () => void;
+    publishContent: () => void;
 }
 
 const ContentContext = createContext<ContentContextType | null>(null);
@@ -62,6 +63,19 @@ function stripEmptyStrings(obj: Record<string, unknown>): Record<string, unknown
     return result;
 }
 
+/** Load published overrides from public/content-overrides.json */
+async function loadFromFile(): Promise<Partial<SiteContent>> {
+    try {
+        const res = await fetch("/content-overrides.json?t=" + Date.now());
+        if (!res.ok) return {};
+        const data = await res.json();
+        if (!data || typeof data !== "object" || Object.keys(data).length === 0) return {};
+        return migrateOverrides(data);
+    } catch {
+        return {};
+    }
+}
+
 function loadFromStorage(): Partial<SiteContent> {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -88,14 +102,54 @@ function saveToStorage(overrides: Partial<SiteContent>) {
     }
 }
 
+/**
+ * Download current overrides as content-overrides.json.
+ * The user must save it to public/content-overrides.json then git add + commit + push.
+ */
+function downloadOverrides(overrides: Partial<SiteContent>) {
+    const json = JSON.stringify(overrides, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "content-overrides.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
 export function ContentProvider({ children }: { children: ReactNode }) {
     const [overrides, setOverrides] = useState<Partial<SiteContent>>(() => loadFromStorage());
+    const [fileLoaded, setFileLoaded] = useState(false);
+
+    // On mount, load published overrides from JSON file
+    // If localStorage has data (admin is editing), localStorage takes priority
+    // If localStorage is empty (normal visitor), use the file data
+    useEffect(() => {
+        loadFromFile().then((fileOverrides) => {
+            setOverrides((prev) => {
+                const hasLocalOverrides = Object.keys(prev).length > 0;
+                if (hasLocalOverrides) {
+                    // Admin has local edits — keep them, but remember the file data
+                    return prev;
+                }
+                // Normal visitor — use published overrides from JSON file
+                return fileOverrides;
+            });
+            setFileLoaded(true);
+        });
+    }, []);
 
     const content = deepMerge(defaultContent, overrides);
 
     useEffect(() => {
-        saveToStorage(overrides);
-    }, [overrides]);
+        if (!fileLoaded) return;
+        // Only save to localStorage if there are actual overrides (admin editing)
+        if (Object.keys(overrides).length > 0) {
+            saveToStorage(overrides);
+        }
+    }, [overrides, fileLoaded]);
 
     // Sync across tabs: when admin saves in one tab, the site tab picks it up
     useEffect(() => {
@@ -160,8 +214,12 @@ export function ContentProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(STORAGE_KEY);
     }, []);
 
+    const publishContent = useCallback(() => {
+        downloadOverrides(overrides);
+    }, [overrides]);
+
     return (
-        <ContentContext.Provider value={{ content, updateSection, updateField, removeField, resetSection, resetAll }}>
+        <ContentContext.Provider value={{ content, updateSection, updateField, removeField, resetSection, resetAll, publishContent }}>
             {children}
         </ContentContext.Provider>
     );
