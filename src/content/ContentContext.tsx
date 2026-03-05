@@ -93,12 +93,8 @@ function loadFromStorage(): Partial<SiteContent> {
 function saveToStorage(overrides: Partial<SiteContent>) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
-    } catch (e) {
-        console.warn("Failed to save content to localStorage", e);
-        // If quota exceeded, alert user
-        if (e instanceof DOMException && e.name === "QuotaExceededError") {
-            alert("Erro: O armazenamento está cheio. Tente usar imagens menores ou resetar o conteúdo.");
-        }
+    } catch {
+        // Silently ignore — content is persisted via JSON file for deploy
     }
 }
 
@@ -117,6 +113,11 @@ function downloadOverrides(overrides: Partial<SiteContent>) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+}
+
+/** Check if we're on the admin page */
+function isAdminPage() {
+    return window.location.pathname.startsWith("/admin");
 }
 
 export function ContentProvider({ children }: { children: ReactNode }) {
@@ -145,8 +146,8 @@ export function ContentProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         if (!fileLoaded) return;
-        // Only save to localStorage if there are actual overrides (admin editing)
-        if (Object.keys(overrides).length > 0) {
+        // Only save to localStorage when admin is actively editing
+        if (isAdminPage() && Object.keys(overrides).length > 0) {
             saveToStorage(overrides);
         }
     }, [overrides, fileLoaded]);
